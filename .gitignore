@@ -2,4 +2,5 @@
 dist/
 build/
 chromium/
-ddddocr/common.onnx
+ddddocr/
+venv/
