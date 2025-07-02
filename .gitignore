@@ -1,0 +1,5 @@
+# 忽略打包产物和大模型文件
+dist/
+build/
+chromium/
+ddddocr/common.onnx
