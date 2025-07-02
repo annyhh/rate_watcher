@@ -1,0 +1,1 @@
+pyinstaller --onefile --hidden-import=ddddocr --hidden-import=selenium --hidden-import=requests --add-data "ddddocr/common_old.onnx;ddddocr" --add-data "chromedriver.exe;." --add-data "chromium/chrome.exe;chromium" rate_watch.py
