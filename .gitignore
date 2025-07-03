@@ -1,6 +1,8 @@
-# 忽略打包产物和大模型文件
+# 忽略打包生成物和大模型文件
 dist/
 build/
 chromium/
 ddddocr/
-venv/
+*.exe
+*.dll
+*.pkg
