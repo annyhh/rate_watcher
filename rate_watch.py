@@ -1,6 +1,7 @@
 import sys
 import time
 import base64
+import traceback
 
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
@@ -48,10 +49,36 @@ def write_to_excel(data):
         ws.append(["时间", "币种", "现汇买入价", "现钞买入价", "卖出价"])
     else:
         wb = load_workbook(EXCEL_FILE)
-        ws = wb[SHEET_NAME]
+        if SHEET_NAME in wb.sheetnames:
+            ws = wb[SHEET_NAME]
+        else:
+            ws = wb.create_sheet(SHEET_NAME)
+            ws.append(["时间", "币种", "现汇买入价", "现钞买入价", "卖出价"])
     ws.append(data)
     wb.save(EXCEL_FILE)
     print("✅ 写入 Excel：", data)
+
+def get_code(driver, retry_times=3):
+    for attempt in range(retry_times):
+        print(f"🔍 第{attempt + 1}次获取验证码...")
+        img = driver.find_element(By.ID, "captcha_img")
+        img.click()
+        time.sleep(1)
+        img.screenshot("captcha.png")
+
+        ocr = ddddocr.DdddOcr()
+        with open("captcha.png", "rb") as f:
+            code = ocr.classification(f.read()).strip()
+
+        print("验证码识别：", repr(code))
+
+        if len(code) == 4 and code.isalnum():
+            print("✅ 验证码正确")
+            return code
+        else:
+            print("❌ 验证码错误,重试", code)
+    print("❌ 多次获取验证码失败，退出")
+    return None
 
 def get_exchange_rate(driver):
     global last_price
@@ -63,14 +90,7 @@ def get_exchange_rate(driver):
         EC.presence_of_element_located((By.ID, "captcha_img"))
     )
 
-    img = driver.find_element(By.ID, "captcha_img")
-    img.screenshot("captcha.png")
-
-    ocr = ddddocr.DdddOcr()
-    with open("captcha.png", "rb") as f:
-        code = ocr.classification(f.read())
-
-    print("验证码识别：", code)
+    code = get_code(driver)
 
     driver.find_element(By.NAME, "captcha").send_keys(code)
     driver.find_element(By.XPATH, '//input[@value="查询"]').click()
@@ -84,12 +104,15 @@ def get_exchange_rate(driver):
 
     cols = rows[0].find_elements(By.TAG_NAME, "td")
     now = time.strftime("%Y-%m-%d %H:%M:%S")
-    xianhui = float(cols[1].text.strip())
+    xianhui = None
+    if len(cols) >= 4:
+        xianhui = float(cols[1].text.strip())
+        data = [now, CURRENCY, xianhui, cols[2].text.strip(), cols[3].text.strip()]
+        write_to_excel(data)
+    else:
+        print("⚠️ 跳过：列数不足，内容：", [c.text for c in cols])
 
-    data = [now, CURRENCY, xianhui, cols[2].text.strip(), cols[3].text.strip()]
-    write_to_excel(data)
-
-    if last_price is not None:
+    if last_price is not None and xianhui is not None:
         delta = round(abs(xianhui - last_price), 4)
         if delta >= THRESHOLD:
             send_wechat_notify(
@@ -106,11 +129,11 @@ def resource_path(relative_path):
 
 def main():
     options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
     options.add_argument('--disable-blink-features=AutomationControlled')
     chrome_path = resource_path("chromedriver.exe")
     service = Service(chrome_path)
-    driver = webdriver.Chrome(service=service)
-    # driver = webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(service=service, options=options)
 
     print(f"🌀 汇率监控启动中（币种：{CURRENCY}）...")
 
@@ -124,6 +147,7 @@ def main():
         print("🛑 已退出")
     except Exception as e:
         print("❌ 出错了：", str(e))
+        traceback.print_exc()
         driver.quit()
 
 
